@@ -5,19 +5,17 @@ int main(int argc, char *argv[])
 
 	struct sockaddr_in server_addr, client_addr;
 	struct identification server, user;
-	struct msg sv_msg;
+	struct msg serverMsg;
 
-	int ret, newfd, listener, addrlen, i, len, k;
+	int ret, newfd, listener, addrlen, i, len, k, fdmax, port;
 
 	fd_set master;
 	fd_set read_fds;
-	int fdmax;
 
 	char buffer[BUF_LEN];
-	char ServerPort[5] = "4242";
-	char Command[1024];
+	char command[1024];
 
-	FILE *UsersFile, *ChatBuffer, *RegistryFile;
+	FILE *UsersFile;
 
 	if (argc != 2)
 	{
@@ -25,12 +23,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	strcpy(ServerPort, argv[1]);
-	printf("La porta selezionata è %s \n", ServerPort);
-
-	printf("------------------ server online ------------------\n\n");
-	printf("Comandi disponibili\n\n");
-	printf("1 <help>\n2 <list>\n3 <esc>\n\n");
+	printf("------------------ Server online ------------------\n\n");
+	printf("Commands: \n\n");
+	printf("1 help\n2 list\n3 esc\n\n");
 
 	memset(&user, 0, sizeof(user));
 	memset(&server, 0, sizeof(server));
@@ -88,21 +83,21 @@ int main(int argc, char *argv[])
 				if (i == 0)
 				{
 
-					// Check della correttezza del comando sullo stdin
-					fscanf(stdin, "%s", Command);
-					if (strlen(Command) > 1)
+					// Checking of command
+					fscanf(stdin, "%s", command);
+					if (strlen(command) > 1)
 					{
 						printf("Command doesn't exist\n");
 						break;
 					}
-					if (Command[0] < '1' || Command[0] > '3')
+					if (command[0] < '1' || command[0] > '3')
 					{
 						printf("Command doesn't exist\n");
 						break;
 					}
 
 					// ------------------ switching comandi server -------------------
-					switch (Command[0])
+					switch (command[0])
 					{
 					case '1':
 						// show
@@ -146,7 +141,7 @@ int main(int argc, char *argv[])
 					// potrebbe essere chiesto nuovamente al server
 					else
 					{
-						struct msg_header header_master;
+						struct header header_master;
 						char portString[5];
 						// Metto la richiesta nel buffer (pacchetto "REQ\0")
 						ret = recieveHeader(i, &header_master);
@@ -178,7 +173,7 @@ int main(int argc, char *argv[])
 								struct Registry registro;
 
 								recieveMsg(buffer, i);
-								printf("Registro di utente nuovo\n");
+								printf("Registrer started\n");
 								sscanf(buffer, "%s %s", server.Username, server.Password);
 
 								if (checkClient(server.Username) == 0)
@@ -188,19 +183,11 @@ int main(int argc, char *argv[])
 								else
 								{
 									sendHeader(i, 1, "register", "0000");
-									UsersFile = fopen("Users.txt", "ab");
-									fwrite(&server, sizeof(server),1,UsersFile);
+									UsersFile = fopen("Users.txt", "r+");
+									fwrite(&server, sizeof(server), 1, UsersFile);
 									fclose(UsersFile);
 
-									strcpy(registro.Username, server.Username);
-									registro.Port = 0;
-									registro.timestamp_in = 0;
-									registro.timestamp_out = 0;
-
-									RegistryFile = fopen("UsersHistory.txt","ab");
-									fwrite(&registro, sizeof(struct Registry),1,RegistryFile);
-									
-									printf("Resgistro fatto\n");
+									printf("Resgistro done\n");
 									break;
 								}
 							}
@@ -209,15 +196,37 @@ int main(int argc, char *argv[])
 							{ //Login
 								recieveMsg(buffer, i);
 								sscanf(buffer, "%s %s", user.Username, user.Password);
-								printf("Login utente\n");
-								sendHeader(i, 2, "login", "8000");
-								printf("Login fatto\n");
-								break;
+
+								if (checkUser(UsersFile, &user, sizeof(user)) == 0)
+								{
+									printf("Login started\n");
+									sendHeader(i, 2, "login", "8000");
+
+									// add timestamp_in
+									WriteLogin(user.Username, header_master.PortNumber);
+									printf("Login done\n");
+									break;
+								}
 							}
 							case 'C':
 							{ //Chat
 								recieveMsg(buffer, i);
 								printf("Chat di %s", buffer);
+
+								port = checkOnline(buffer);
+								sprintf(portString, "%i", port);
+
+								if(port == 0){
+									printf("Port 0");
+								}
+
+								// send if online or offline
+								if(port == -1){
+									sendHeader(i, 3, 'no', portString);
+								}else{
+									sendHeader(i, 3, 'yes', portString);
+								}
+								break;
 							}
 
 								if (ret < 0)
