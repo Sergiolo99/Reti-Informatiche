@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <netinet/in.h>
-//#include <ws2tcpip.h>
-//#include <winsock.h>
+//#include <arpa/inet.h>
+//#include <unistd.h>
+//#include <sys/socket.h>
+//#include <sys/select.h>
+//#include <netinet/in.h>
+#include <ws2tcpip.h>
+#include <winsock.h>
 
 #define BUF_LEN 1024
 #define REQUEST_LEN 4 // REQ\0
@@ -166,7 +166,7 @@ int sendGroupMsg(char *msg, struct list * ptr)
       int ret = 0;
       struct list * pointer;
 
-      for(pointer = ptr; pointer != NULL; pointer->ptrlist++)
+      for(pointer = ptr; pointer != NULL; pointer = pointer->ptrlist)
       {
             ret = sendMsg(msg,pointer->socket);
             return ret;
@@ -318,4 +318,18 @@ void insertSocket(int socket, char *username)
       nodo->socket = socket;
       strcpy(nodo->username,username);
       nodo->ptrlist = NULL;
+}
+
+void setUsernameSocket(int sendSocket, struct list * ptr, char * username)
+{
+      int ret;
+      struct list * pointer;
+
+      for(pointer = ptr; pointer !=NULL; pointer = pointer->ptrlist)
+      {
+            if(pointer->socket == sendSocket)
+            {
+                  strcpy(username, pointer->username);
+            }
+      }
 }

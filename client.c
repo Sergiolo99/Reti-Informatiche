@@ -305,16 +305,24 @@ int main(int argc, const char **argv)
 						memset(new, 0, sizeof(new));
 						recieveMsg(new, accpt);
 
-						printf("New client connecting\n");
+						printf("New client connection\n");
 					}
 					else
 					{
-						char buffMessage[1024];
+						char buffMessage[1024] = "";
 						char clUsername[20];
 
-						memset(clUsername, 0, sizeof(clUsername));
-						recieveMsg(buffMessage, i);
+						if(recieveMsg(buffMessage, i) == 0)
+						{
+							if(i == socketClient){
+								online = 1;
+							}
+							FD_CLR(i,&master);
+							close(i);
+							continue;
+						}
 
+						memset(clUsername, 0, sizeof(clUsername));
 						printf("Messagio: %s\n", buffMessage);
 					}
 				}
