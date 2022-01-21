@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
-//#include <arpa/inet.h>
-//#include <unistd.h>
-//#include <sys/socket.h>
-//#include <sys/select.h>
-//#include <netinet/in.h>
-#include <ws2tcpip.h>
-#include <winsock.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+//#include <ws2tcpip.h>
+//#include <winsock.h>
 
 #define BUF_LEN 1024
 #define REQUEST_LEN 4 // REQ\0
@@ -48,6 +48,22 @@ typedef struct CommandCl
       char argument[20];
 
 }CommandCl;
+
+typedef struct list
+{
+      int socket;
+      char username[20];
+      struct list *ptrlist;
+}list;
+
+typedef struct buffMessage
+{
+      char sender[20];
+      char reciever[20];
+      char message[1024];
+      time_t time;
+}buffMessage;
+
 
 int sendHeader(int receiver_socket, char req_type, char *options, char *port_number)
 {
@@ -145,6 +161,19 @@ int sendMsg(char *send_buffer, int receiver_socket)
       return ret;
 }
 
+int sendGroupMsg(char *msg, struct list * ptr)
+{     
+      int ret = 0;
+      struct list * pointer;
+
+      for(pointer = ptr; pointer != NULL; pointer->ptrlist++)
+      {
+            ret = sendMsg(msg,pointer->socket);
+            return ret;
+      }
+      return ret;
+}
+
 int recieveMsg(char *recv_buffer, int sender_socket)
 {
       int msg_len;
@@ -176,7 +205,7 @@ int recieveMsg(char *recv_buffer, int sender_socket)
 
 int checkClient(char *username)
 {
-      FILE *fptr = fopen("Users.txt", "r");
+      FILE *fptr = fopen("Users.txt", "rb");
       struct identification user; // usato per fare il parsing della struttura nel file
 
       while (fread(&user, sizeof(user), 1, fptr))
@@ -191,7 +220,7 @@ int checkClient(char *username)
 int checkUser(FILE *fileptr, struct identification *userIdent, int size)
 {
       struct identification user;
-      fileptr = fopen("Users.txt", "r");
+      fileptr = fopen("Users.txt", "rb");
       while (fread(&user, size, 1, fileptr))
       {
             if (strcmp(user.Username, userIdent->Username) == 0 && strcmp(user.Password, userIdent->Password) == 0)
@@ -204,12 +233,12 @@ int checkUser(FILE *fileptr, struct identification *userIdent, int size)
       return -1;
 }
 
-int WriteLogin(char *username, char *port)
+int WriteLogin(char *username, char *port, FILE *ptrfile)
 {
       struct Registry registry;
       time_t rawtime;
-      FILE *fileptr = fopen("UsersHistory.txt", "r+");
-      while (fread(&registry, sizeof(struct Registry), 1, fileptr))
+      ptrfile = fopen("UsersHistory.txt", "rb+");
+      while (fread(&registry, sizeof(struct Registry), 1, ptrfile))
       {     
             //searh of username
             if (strcmp(registry.Username, username) == 0)
@@ -220,21 +249,21 @@ int WriteLogin(char *username, char *port)
                   registry.Port = atoi(port);
 
                   // wite values
-                  fseek(fileptr, -1 * sizeof(struct Registry), SEEK_CUR);
-                  fwrite(&registry, sizeof(struct Registry), 1, fileptr);
-                  fclose(fileptr);
+                  fseek(ptrfile, -1 * sizeof(struct Registry), SEEK_CUR);
+                  fwrite(&registry, sizeof(struct Registry), 1, ptrfile);
+                  fclose(ptrfile);
                   return 0;
             }
       }
 
-      fclose(fileptr);
+      fclose(ptrfile);
       return -1;
 }
 
 int WriteLogout(char *username)
 {
       // prende in ingresso user e cerca una corrispondenza nel file degli utenti online e ne cambia il ts
-      FILE *fileptr = fopen("UsersHistory.txt", "r+");
+      FILE *fileptr = fopen("UsersHistory.txt", "ab");
       struct Registry registry;
       time_t rawtime;
 
@@ -259,18 +288,34 @@ int WriteLogout(char *username)
 int checkOnline(char *Username)
 {
       // apro il file di history
+      printf("1\n");
       FILE *fptr;
       struct Registry registro;
-      fptr = fopen("UsersHistory.txt", "r");
+      printf("2\n");
+      fptr = fopen("UsersHistory.txt", "rb");
+
+      printf("antes\n");
       
       while (fread(&registro, sizeof(registro), 1, fptr))
       {
+            printf("si ha hecho el while\n");
             if (strcmp(registro.Username, Username) == 0 && (registro.timestamp_out == 0) && (registro.Port != 0))
             {
                   fclose(fptr);
+                  printf("ha hecho el if\n");
                   return registro.Port;
             }
+            break;
       }
+      printf("no ha hecho el while de checkonline\n");
       fclose(fptr);
       return -1;
+}
+
+void insertSocket(int socket, char *username)
+{
+      struct list *nodo = (struct list *)malloc(sizeof(struct list));
+      nodo->socket = socket;
+      strcpy(nodo->username,username);
+      nodo->ptrlist = NULL;
 }

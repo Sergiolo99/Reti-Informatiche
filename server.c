@@ -5,9 +5,10 @@ int main(int argc, char *argv[])
 
 	struct sockaddr_in server_addr, client_addr;
 	struct identification server, user;
-	struct msg serverMsg;
+	//struct msg serverMsg;
 
-	int ret, newfd, listener, addrlen, i, len, k, fdmax, port;
+	int ret, newfd, listener, addrlen, i, fdmax;
+	//int port;
 
 	fd_set master;
 	fd_set read_fds;
@@ -15,7 +16,7 @@ int main(int argc, char *argv[])
 	char buffer[BUF_LEN];
 	char command[1024];
 
-	FILE *UsersFile;
+	FILE *UsersFile, *UsersHistoryFile;
 
 	if (argc != 2)
 	{
@@ -164,75 +165,96 @@ int main(int argc, char *argv[])
 							// rimuovo il descrittore newfd da quelli da monitorare
 							FD_CLR(i, &master);
 						}
-						else
+
+						memset(buffer, 0, sizeof(buffer));
+
+						switch (header_master.RequestType)
 						{
-							switch (header_master.RequestType)
+						case 'R':
+						{ //Registro
+							struct Registry registro;
+
+							recieveMsg(buffer, i);
+							printf("Registrer started\n");
+							sscanf(buffer, "%s %s", server.Username, server.Password);
+
+							if (checkClient(server.Username) == 0)
 							{
-							case 'R':
-							{ //Registro
-								struct Registry registro;
+								sendHeader(i, 'R', "registered", "0000");
+								printf("ya registrado");
+							}
+							else
+							{
+								sendHeader(i, 1, "register", "0000");
+								UsersFile = fopen("Users.txt", "ab");
+								fwrite(&server, sizeof(server), 1, UsersFile);
+								fclose(UsersFile);
 
-								recieveMsg(buffer, i);
-								printf("Registrer started\n");
-								sscanf(buffer, "%s %s", server.Username, server.Password);
+								UsersHistoryFile = fopen("UsersHistory.txt", "ab");
 
-								if (checkClient(server.Username) == 0)
-								{
-									sendHeader(i, 'R', "registered", "0000");
-								}
-								else
-								{
-									sendHeader(i, 1, "register", "0000");
-									UsersFile = fopen("Users.txt", "r+");
-									fwrite(&server, sizeof(server), 1, UsersFile);
-									fclose(UsersFile);
+								strcpy(registro.Username,server.Username);
+								registro.Port = 0;
+								registro.timestamp_in = 0;
+								registro.timestamp_out = 0;
+								fwrite(&registro, sizeof(struct Registry), 1, UsersHistoryFile);
+								fclose(UsersHistoryFile);
 
-									printf("Resgistro done\n");
-									break;
-								}
+								printf("Resgistro done\n");
+							}
+						}
+						break;
+
+						case 'L':
+						{ //Login
+							recieveMsg(buffer, i);
+							sscanf(buffer, "%s %s", user.Username, user.Password);
+
+							if (checkUser(UsersFile, &user, sizeof(user)) == 0)
+							{
+								printf("Login started\n");
+								sendHeader(i, 2, "login", "8000");
+
+								// add timestamp_in
+								WriteLogin(user.Username, header_master.PortNumber, UsersHistoryFile);
+								printf("Login done\n");
+							}
+						}
+						break;
+
+						case 'C':
+						{ //Chat
+							recieveMsg(buffer, i);
+							printf("peticion de mensaje recibida para: %s\n",buffer);
+							
+							int puerto = checkOnline(buffer);
+
+							printf("despues\n");
+
+							if (puerto == 0)
+							{
+								printf("Port 0");
 							}
 
-							case 'L':
-							{ //Login
-								recieveMsg(buffer, i);
-								sscanf(buffer, "%s %s", user.Username, user.Password);
-
-								if (checkUser(UsersFile, &user, sizeof(user)) == 0)
-								{
-									printf("Login started\n");
-									sendHeader(i, 2, "login", "8000");
-
-									// add timestamp_in
-									WriteLogin(user.Username, header_master.PortNumber);
-									printf("Login done\n");
-									break;
-								}
+							sprintf(portString, "%d", puerto);
+							printf("puerto es %i\n", puerto);
+							printf("string es: %s\n", portString);
+							// send if online or offline
+							if (puerto == -1)
+							{
+								sendHeader(i, 3, "no", portString);
 							}
-							case 'C':
-							{ //Chat
-								recieveMsg(buffer, i);
-								printf("Chat di %s", buffer);
-
-								port = checkOnline(buffer);
-								sprintf(portString, "%i", port);
-
-								if(port == 0){
-									printf("Port 0");
-								}
-
-								// send if online or offline
-								if(port == -1){
-									sendHeader(i, 3, 'no', portString);
-								}else{
-									sendHeader(i, 3, 'yes', portString);
-								}
-								break;
+							else
+							{
+								sendHeader(i, 3, "yes", portString);
 							}
 
-								if (ret < 0)
-								{
-									perror("Errore in fase di comunicazione \n");
-								}
+							printf("Enviados datos dest\n");
+						}
+						break;
+
+							if (ret < 0)
+							{
+								perror("Errore in fase di comunicazione \n");
 							}
 						}
 					}

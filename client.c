@@ -3,18 +3,21 @@
 #define BUFFER_SIZE 1024
 #define RESPONSE_LEN 9
 
-int main(int argc, char *argv[])
+int main(int argc, const char **argv)
 {
 
 	int ret, sd, fdmax, listener, socketClient;
+	int chat = 0;
+	int online = 0;
 
-	struct msg clMsg;
+	//struct msg clMsg;
 	struct identification user;
-	struct sockaddr_in srv_addr, cl_addr, cl_listen_addr;
+	struct sockaddr_in srv_addr, cl_addr, cl_listen_addr, new_addr;
+	struct list *socketslist = NULL;
 
 	fd_set master, readfds;
 
-	char buffer[BUFFER_SIZE];
+	//char buffer[BUFFER_SIZE];
 	char Port[5];
 	char dest[10];
 
@@ -31,9 +34,23 @@ int main(int argc, char *argv[])
 	srv_addr.sin_port = htons(4242);
 	inet_pton(AF_INET, "127.0.0.1", &srv_addr.sin_addr);
 
+	if (argc != 2)
+	{
+		perror("Parameters don't match");
+		exit(1);
+	}
+	strcpy(Port, argv[1]);
+
+	/*Creazione indirizo device*/
+	memset(&cl_addr, 0, sizeof(cl_addr));
+	cl_listen_addr.sin_family = AF_INET;
+	cl_listen_addr.sin_port = htons(atoi(Port));
+	inet_pton(AF_INET, "127.0.0.1", &cl_listen_addr.sin_addr);
+
 	/*Creazione socket client*/
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	ret = bind(listener, (struct sockaddr *)&cl_listen_addr, sizeof(cl_listen_addr));
+	listen(listener, 10);
 
 	if (ret < 0)
 	{
@@ -43,19 +60,6 @@ int main(int argc, char *argv[])
 
 	FD_SET(listener, &master);
 	fdmax = listener;
-
-	/*Creazione indirizo device*/
-	memset(&cl_addr, 0, sizeof(cl_addr));
-	cl_listen_addr.sin_family = AF_INET;
-	cl_listen_addr.sin_port = htons(atoi(Port));
-	inet_pton(AF_INET, "127.0.0.1", &cl_listen_addr.sin_addr);
-
-	if (argc != 2)
-	{
-		perror("Parameters don't match");
-		exit(1);
-	}
-	strcpy(Port, argv[1]);
 
 	/* connessione */
 	ret = connect(sd, (struct sockaddr *)&srv_addr, sizeof(srv_addr));
@@ -68,7 +72,7 @@ int main(int argc, char *argv[])
 
 	for (;;)
 	{
-		char cmdString[1024], headerBuffer[1024], sendbuffer[1024];
+		char cmdString[1024], sendbuffer[1024];
 		char cmd[10], port[10], username[10], password[10];
 		struct header header;
 
@@ -78,7 +82,7 @@ int main(int argc, char *argv[])
 		if (strcmp(cmd, "register") == 0)
 		{
 			sendHeader(sd, 'R', "register", Port);
-			sprintf(sendbuffer, "%s %s", port, username);
+			sprintf(sendbuffer, "%s %s", username, password);
 		}
 		else if (strcmp(cmd, "login") == 0)
 		{
@@ -113,9 +117,13 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
+		else
+		{
+			printf("usuario ya registrado");
+		}
 	}
 
-	printf("---------------- Commands ----------------\n");
+	printf("\n---------------- Commands ----------------\n");
 	printf("1 hanging:\n");
 	printf("2 show <username>:\n");
 	printf("3 chat <username>:\n");
@@ -144,7 +152,7 @@ int main(int argc, char *argv[])
 
 					memset(&cmd, 0, sizeof(cmd));
 
-					if (fgets(string, 1024 - 1, stdin) == 0)
+					if (fgets(string, 1024 - 1, stdin) == NULL)
 					{
 						perror("Command not readed");
 						fflush(stdin);
@@ -153,13 +161,84 @@ int main(int argc, char *argv[])
 					sscanf(string, "%s %s", cmd.command, cmd.argument);
 
 					//check command
-					if (strcmp(cmd.command, "hanging") != 0 || strcmp(cmd.command, "show") != 0 || strcmp(cmd.command, "chat") != 0 || strcmp(cmd.command, "share") != 0 || strcmp(cmd.command, "out") != 0)
+					/*if (strcmp(cmd.command, "hanging") != 0 || strcmp(cmd.command, "show") != 0 || strcmp(cmd.command, "chat") != 0 || strcmp(cmd.command, "share") != 0 || strcmp(cmd.command, "out") != 0)
 					{
 						printf("Comando non valido:\n");
 						break;
+					}*/
+
+					if (chat == 0)
+					{
+						if (strcmp(cmd.command, "chat") == 0)
+						{
+							struct header header;
+							char sendbuffer[1024];
+
+							sendHeader(sd, 'C', "NULL", "0000");
+							printf("header envido\n");
+							strcpy(dest, cmd.argument);
+							sprintf(sendbuffer, "%s", cmd.argument);
+
+							//send msg request to server
+							sendMsg(sendbuffer, sd);
+							printf("mensaje enviado\n");
+							//recieve response from server
+							recieveHeader(sd, &header);
+							printf("Puerta del header: %s\n", header.PortNumber);
+
+							//if online
+							if (strcmp(header.Options, "yes") == 0)
+							{
+								//Creation of socket and adress
+								memset(&cl_addr, 0, sizeof(cl_addr));
+								cl_addr.sin_family = AF_INET;
+								cl_addr.sin_port = htons(atoi(header.PortNumber));
+								inet_pton(AF_INET, "127.0.0.1", &cl_listen_addr.sin_addr);
+								printf("direccion creada\n");
+
+								socketClient = socket(AF_INET, SOCK_STREAM, 0);
+								printf("socket creado %d\n", socketClient);
+								//Connection to dest
+								ret = connect(socketClient, (struct sockaddr *)&cl_listen_addr, sizeof(cl_listen_addr));
+								printf("ret es: %i\n", ret);
+								if (ret < 0)
+								{
+									printf("Connection with user failed\n");
+								}
+
+								sendMsg(user.Username, socketClient);
+
+								FD_SET(socketClient, &master);
+								fdmax = socketClient;
+
+								online = 1;
+
+								insertSocket(socketClient, cmd.argument);
+							}
+							else if (strcmp(header.Options, "no") == 0)
+							{
+								printf("recibido no online\n");
+							}
+							chat = 1;
+						}
+					}
+					else
+					{
+						if (string[0] != '\\')
+						{
+							if (online == 1)
+							{
+								printf("Write your message: \n");
+								char messageBuff[1024];
+								char input[1024];
+								fgets(input, 1024 - 1, stdin);
+								sscanf(messageBuff, "%s", input);
+								sendGroupMsg(messageBuff,socketslist);
+							}
+						}
 					}
 
-					switch (cmd.command[0])
+					/*switch (cmd.command[0])
 					{
 					case 'h':
 					{
@@ -210,28 +289,31 @@ int main(int argc, char *argv[])
 						}
 						break;
 					}
-					}
+					}*/
 				}
 				else
 				{
-					if(i==listener){
+					if (i == listener)
+					{
 
-						int addrlen = sizeof(cl_addr);
-
-						int accpt = accept(i,(struct sockaddr *)&cl_addr, (socklen_t *)&addrlen);
+						int addrlen = sizeof(new_addr);
+						int accpt = accept(listener, (struct sockaddr *)&new_addr, (socklen_t *)&addrlen);
 						fdmax = accpt;
 						FD_SET(accpt, &master);
-						
-						char new[20];
-						memset(new,0,sizeof(new));
-						recieveMsg(new,accpt);
 
-						printf("New client connecting");
-					}else{
+						char new[20];
+						memset(new, 0, sizeof(new));
+						recieveMsg(new, accpt);
+
+						printf("New client connecting\n");
+					}
+					else
+					{
 						char buffMessage[1024];
 						char clUsername[20];
 
-						memset(clUsername,0,sizeof(clUsername));
+						memset(clUsername, 0, sizeof(clUsername));
+						recieveMsg(buffMessage, i);
 
 						printf("Messagio: %s\n", buffMessage);
 					}
@@ -239,3 +321,4 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+}
