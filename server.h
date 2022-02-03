@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
-//#include <arpa/inet.h>
-//#include <unistd.h>
-//#include <sys/socket.h>
-//#include <sys/select.h>
-//#include <netinet/in.h>
-#include <ws2tcpip.h>
-#include <winsock.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <stdio_ext.h>
+//#include <ws2tcpip.h>
+//#include <winsock.h>
 
 #define BUF_LEN 1024
 #define REQUEST_LEN 4 // REQ\0

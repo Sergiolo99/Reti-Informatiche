@@ -79,17 +79,17 @@ int main(int argc, const char **argv)
 		fgets(cmdString, 1024 - 1, stdin);
 		sscanf(cmdString, "%s %s %s %s", cmd, port, username, password);
 
-		if (strcmp(cmd, "register") == 0)
+		if (strcmp(cmd, "signup") == 0)
 		{
 			sendHeader(sd, 'R', "register", Port);
-			sprintf(sendbuffer, "%s %s", username, password);
+			sprintf(sendbuffer, "%s %s", port, username);
 		}
-		else if (strcmp(cmd, "login") == 0)
+		else if (strcmp(cmd, "in") == 0)
 		{
 			sendHeader(sd, 'L', "login", Port);
 			strcpy(user.Username, username);
 			strcpy(user.Password, password);
-			sprintf(sendbuffer, "%s %s", username, password);
+			sprintf(sendbuffer, "%s %s", port, username);
 		}
 
 		//send credentials to server
@@ -131,11 +131,12 @@ int main(int argc, const char **argv)
 	printf("5 out:\n");
 
 	fflush(stdin);
+	__fpurge(stdin);
 
 	for (;;)
 	{
 		readfds = master;
-		printf("Select call\n");
+		//printf("Select call\n");
 		select(fdmax + 1, &readfds, NULL, NULL, NULL);
 
 		for (int i = 0; i <= fdmax; i++)
@@ -172,6 +173,91 @@ int main(int argc, const char **argv)
 						if (strcmp(cmd.command, "chat") == 0)
 						{
 							struct header header;
+							char sendbuffer[1024];
+							char portChat[5];
+
+							sendHeader(sd, 'C', "NULL", "0000");
+							printf("header envido\n");
+							strcpy(dest, cmd.argument);
+							sprintf(sendbuffer, "%s", cmd.argument);
+
+							//send msg request to server
+							sendMsg(sendbuffer, sd);
+							printf("mensaje enviado\n");
+							//recieve response from server
+							recieveHeader(sd, &header);
+							printf("Puerta del header: %s\n", header.PortNumber);
+							strcpy(portChat,header.PortNumber);
+
+							//if online
+							if (strcmp(header.Options, "yes") == 0)
+							{
+								//Creation of socket and adress
+								memset(&cl_addr, 0, sizeof(cl_addr));
+								cl_addr.sin_family = AF_INET;
+								cl_addr.sin_port = htons(atoi(portChat));
+								inet_pton(AF_INET, "127.0.0.1", &cl_listen_addr.sin_addr);
+								printf("direccion creada\n");
+
+								socketClient = socket(AF_INET, SOCK_STREAM, 0);
+								printf("socket creado %d\n", socketClient);
+								//Connection to dest
+								ret = connect(socketClient, (struct sockaddr *)&cl_addr, sizeof(cl_addr));
+								printf("ret es: %i\n", ret);
+								if (ret < 0)
+								{
+									printf("Connection with user failed\n");
+								}
+
+								sendMsg(user.Username, socketClient);
+
+								FD_SET(socketClient, &master);
+								fdmax = socketClient;
+
+								online = 1;
+
+								insertSocket(socketClient, cmd.argument);
+							}
+							else if (strcmp(header.Options, "no") == 0)
+							{
+								printf("recibido no online\n");
+							}
+							chat = 1;
+						}
+					}
+					else
+					{
+						if (string[0] != '\\')
+						{
+							if (online == 1)
+							{
+								printf("Write your message: \n");
+								//char messageBuff[1024];
+								char input[1024];
+								__fpurge(stdin);
+								fflush(stdin);
+								fgets(input, 1024 - 1, stdin);
+								//sscanf(messageBuff, "%s", input);
+								sendMsg(input,socketClient);
+							}
+						}
+					}
+
+					/*switch (cmd.command[0])
+					{
+					case 'h':
+					{
+						break;
+					}
+
+					case 's':
+					{
+						break;
+					}
+
+					case 'c':
+					{
+						struct header header;
 							char sendbuffer[1024];
 
 							sendHeader(sd, 'C', "NULL", "0000");
@@ -220,74 +306,6 @@ int main(int argc, const char **argv)
 								printf("recibido no online\n");
 							}
 							chat = 1;
-						}
-					}
-					else
-					{
-						if (string[0] != '\\')
-						{
-							if (online == 1)
-							{
-								printf("Write your message: \n");
-								char messageBuff[1024];
-								char input[1024];
-								fgets(input, 1024 - 1, stdin);
-								sscanf(messageBuff, "%s", input);
-								sendGroupMsg(messageBuff,socketslist);
-							}
-						}
-					}
-
-					/*switch (cmd.command[0])
-					{
-					case 'h':
-					{
-						break;
-					}
-
-					case 's':
-					{
-						break;
-					}
-
-					case 'c':
-					{
-						struct header header;
-						char sendbuffer[1024];
-
-						sendHeader(sd, 'C', "null", "0000");
-						strcpy(dest, cmd.argument);
-						sprintf(sendbuffer, "%s", dest);
-
-						//send msg request to server
-						sendMsg(sendbuffer, sd);
-						//recieve response from server
-						recieveHeader(sd, &header);
-
-						//if online
-						if (strcmp(header.Options, "yes") == 0)
-						{
-							//Creation of socket and adress
-							memset(&cl_addr, 0, sizeof(cl_addr));
-							cl_addr.sin_family = AF_INET;
-							cl_addr.sin_port = htons(atoi(header.PortNumber));
-							inet_pton(AF_INET, "127.0.0.1", &cl_listen_addr.sin_addr);
-
-							socketClient = socket(AF_INET, SOCK_STREAM, 0);
-
-							//Connection to dest
-							ret = connect(socketClient, (struct sockaddr *)&cl_addr, sizeof(cl_addr));
-							if (ret < 0)
-							{
-								printf("Connection with user failed");
-							}
-
-							sendMsg(user.Username, socketClient);
-
-							FD_SET(socketClient, &master);
-							fdmax = socketClient;
-						}
-						break;
 					}
 					}*/
 				}

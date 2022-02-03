@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
 							if (checkClient(server.Username) == 0)
 							{
 								sendHeader(i, 'R', "registered", "0000");
-								printf("ya registrado");
+								printf("Already registered\n");
 							}
 							else
 							{
@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
 								fwrite(&registro, sizeof(struct Registry), 1, UsersHistoryFile);
 								fclose(UsersHistoryFile);
 
-								printf("Resgistro done\n");
+								printf("Resgister done\n");
 							}
 						}
 						break;
